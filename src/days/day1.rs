@@ -1,23 +1,21 @@
+use std::error::Error;
 use std::{fs::read_to_string, path::PathBuf};
 
+use crate::days::Day;
 use clap::{arg, command, value_parser, ArgMatches, Command};
-
-use crate::Day;
 
 pub struct Day1;
 
 impl Day for Day1 {
     fn command() -> Command {
-        command!("day1").arg(arg!(--"input" <PATH>).value_parser(value_parser!(std::path::PathBuf)))
+        command!("day1").arg(arg!(--"input" <PATH>).value_parser(value_parser!(PathBuf)))
     }
 
-    fn run(arg_matches: &ArgMatches) {
+    fn run(arg_matches: &ArgMatches) -> Result<(), Box<dyn Error>> {
         let input = match arg_matches.get_one::<PathBuf>("input") {
-            Some(input) => input,
+            Some(input) => read_to_string(input)?,
             None => panic!("Input file is missing"),
         };
-        // read the input file and iterate over the lines
-        let input = read_to_string(input).unwrap();
         let calibration_sum: u32 = input
             .lines()
             .map(|line| {
@@ -43,11 +41,12 @@ impl Day for Day1 {
                         rev_chars.next();
                     }
                 }
-                let first_dig = first_dig.and_then(|c| c.to_digit(10)).unwrap();
-                let last_dig = last_dig.and_then(|c| c.to_digit(10)).unwrap();
+                let first_dig = first_dig.and_then(|c| c.to_digit(10)).unwrap_or(0);
+                let last_dig = last_dig.and_then(|c| c.to_digit(10)).unwrap_or(0);
                 first_dig * 10 + last_dig
             })
             .sum();
         println!("Calibration sum: {}", calibration_sum);
+        Ok(())
     }
 }

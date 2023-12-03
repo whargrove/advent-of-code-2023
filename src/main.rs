@@ -1,16 +1,10 @@
+use crate::{days::day1::Day1, days::day2::Day2, days::Day};
 use clap::Command;
-use day1::Day1;
-use day2::Day2;
+use std::error::Error;
 
-mod day1;
-mod day2;
+mod days;
 
-trait Day {
-    fn command() -> Command;
-    fn run(matches: &clap::ArgMatches);
-}
-
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let cmd = Command::new("advent-of-code-2023")
         .bin_name("advent-of-code-2023")
         .subcommand_required(true)
@@ -21,5 +15,6 @@ fn main() {
         Some(("day1", matches)) => Day1::run(matches),
         Some(("day2", matches)) => Day2::run(matches),
         _ => panic!("Sub-command is not yet implemented"),
-    };
+    }?;
+    Ok(())
 }
