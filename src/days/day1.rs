@@ -24,10 +24,10 @@ impl Day for Day1 {
                 let mut first_dig = None;
                 let mut last_dig = None;
                 while let (Some(&first), Some(&last)) = (chars.peek(), rev_chars.peek()) {
-                    if first.is_digit(10) {
+                    if first.is_ascii_digit() {
                         first_dig = Some(first);
                     }
-                    if last.is_digit(10) {
+                    if last.is_ascii_digit() {
                         last_dig = Some(last);
                     }
                     if first_dig.is_some() && last_dig.is_some() {
