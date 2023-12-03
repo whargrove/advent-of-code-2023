@@ -10,8 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .subcommand_required(true)
         .subcommand(Day1::command())
         .subcommand(Day2::command())
-        .subcommand(Day3::command())
-        ;
+        .subcommand(Day3::command());
     let matches = cmd.get_matches();
     match matches.subcommand() {
         Some(("day1", matches)) => Day1::run(matches),

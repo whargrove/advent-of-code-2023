@@ -1,8 +1,8 @@
+use crate::days::Day;
+use clap::{arg, command, value_parser};
 use std::fs::read_to_string;
 use std::ops::Range;
 use std::path::PathBuf;
-use clap::{arg, command, value_parser};
-use crate::days::Day;
 
 pub struct Day3;
 
@@ -31,6 +31,7 @@ fn run(_input: String) -> Result<u32, Box<dyn std::error::Error>> {
 #[derive(Debug, PartialEq)]
 enum SchematicPart {
     NumberSpan(NumberSpan),
+    SymbolSpan(SymbolSpan),
 }
 
 #[derive(Debug, PartialEq)]
@@ -39,27 +40,48 @@ struct NumberSpan {
     value: u32,
 }
 
-fn find_nums(input: String) -> Result<Vec<SchematicPart>, Box<dyn std::error::Error>> {
+#[derive(Debug, PartialEq)]
+struct SymbolSpan {
+    span: Range<usize>,
+    char: char,
+}
+
+fn find_schematic_parts(input: String) -> Result<Vec<SchematicPart>, Box<dyn std::error::Error>> {
     let mut result: Vec<SchematicPart> = Vec::new();
     let mut buf: Vec<u32> = Vec::new();
     let mut start_idx = None;
     for (idx, char) in input.char_indices() {
         if char.is_ascii_digit() {
             buf.push(char.to_digit(10).unwrap());
+            // only set start index if it is none to avoid moving forward the start of the span
+            // for subsequent digits in the number
             if start_idx.is_none() {
                 start_idx = Some(idx);
             }
-        } else if !buf.is_empty() {
+            continue;
+        }
+
+        if char == '.' && buf.is_empty() {
+            // the buffer is empty, so there's no number to fold and push into the result
+            continue;
+        }
+
+        // if not a digit and the buffer is not empty, then fold the buffer into a single number
+        // and push it into the result
+        if !buf.is_empty() {
             let end_idx = idx;
-            // if not a digit and the buffer is not empty, then fold the buffer into a single number
-            // and push it into the result.
-            // TODO handle symbols
             let value = buf.iter().fold(0, |acc, x| acc * 10 + x);
             let span = start_idx.unwrap()..end_idx;
             result.push(SchematicPart::NumberSpan(NumberSpan { span, value }));
-            // reset
+            // reset the buffer and start index
             buf.clear();
             start_idx = None;
+        }
+
+        if char != '.' {
+            // if not a digit and not a period, then it's a symbol
+            let span = idx..idx + 1;
+            result.push(SchematicPart::SymbolSpan(SymbolSpan { span, char }));
         }
     }
     Ok(result)
@@ -67,35 +89,66 @@ fn find_nums(input: String) -> Result<Vec<SchematicPart>, Box<dyn std::error::Er
 
 #[cfg(test)]
 mod tests {
-    use std::fs::read_to_string;
     use super::*;
+    use std::fs::read_to_string;
 
     // #[test]
-    fn day3() {
+    fn day3_sample() {
         let input = read_to_string("tests/day3").unwrap();
         let result = run(input).unwrap();
         assert_eq!(result, 4361);
     }
 
-    #[test]
-    fn day3_find_num() {
-        // just the first line
-        let input = read_to_string("tests/day3").unwrap().lines().next().unwrap().to_owned();
-        let result = find_nums(input).unwrap().iter().filter_map(|x| match x {
-            SchematicPart::NumberSpan(NumberSpan { value, .. }) => Some(*value),
-            _ => None,
-        }).collect::<Vec<u32>>();
-        assert_eq!(result, vec![467, 114]);
+    macro_rules! parameterized_schema_parts_test {
+        ($name:ident, $input:expr, $expected:expr) => {
+            #[test]
+            fn $name() -> Result<(), Box<dyn std::error::Error>> {
+                let input = String::from($input);
+                let result = find_schematic_parts(input)?;
+                assert_eq!(result, $expected);
+                Ok(())
+            }
+        };
     }
 
-    #[test]
-    fn day3_find_num_with_span() {
-        // just the first line
-        let input = read_to_string("tests/day3").unwrap().lines().next().unwrap().to_owned();
-        let result = find_nums(input).unwrap();
-        assert_eq!(result, vec![
-            SchematicPart::NumberSpan(NumberSpan { span: 0..3, value: 467 }),
-            SchematicPart::NumberSpan(NumberSpan { span: 5..8, value: 114 }),
-        ]);
-    }
+    parameterized_schema_parts_test!(
+        day3_find_schematic_parts_number_spans,
+        "467..114..",
+        vec![
+            SchematicPart::NumberSpan(NumberSpan {
+                span: 0..3,
+                value: 467
+            }),
+            SchematicPart::NumberSpan(NumberSpan {
+                span: 5..8,
+                value: 114
+            }),
+        ]
+    );
+
+    parameterized_schema_parts_test!(
+        day3_find_schematic_parts_symbol_spans,
+        "......#...",
+        vec![SchematicPart::SymbolSpan(SymbolSpan {
+            span: 6..7,
+            char: '#'
+        }),]
+    );
+
+    parameterized_schema_parts_test!(day3_find_schematic_parts_empty, "..........", vec![]);
+
+    parameterized_schema_parts_test!(
+        day3_find_schematic_parts_symbol_adjacent_to_number,
+        "617*......",
+        vec![
+            SchematicPart::NumberSpan(NumberSpan {
+                span: 0..3,
+                value: 617
+            }),
+            SchematicPart::SymbolSpan(SymbolSpan {
+                span: 3..4,
+                char: '*'
+            }),
+        ]
+    );
 }
