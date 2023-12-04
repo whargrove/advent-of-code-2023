@@ -1,6 +1,7 @@
 use crate::days::Day;
 use clap::{arg, command, value_parser};
-use itertools::{enumerate};
+use itertools::enumerate;
+use std::cmp::min;
 use std::fs::read_to_string;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -86,7 +87,7 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                 if schematic_idx > 0 {
                     let line_above = &schematic_lines[schematic_idx - 1].0;
                     // we need to expand the number span to include the characters that are diagonally adjacent
-                    let expanded_number_span = expand_range(number_span);
+                    let expanded_number_span = expand_range(number_span, line_above.len());
                     // slice the line above to get the characters that contain symbols
                     // that are adjacent to this number
                     let line_above_slice = &line_above[expanded_number_span];
@@ -109,7 +110,7 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                 if schematic_idx < schematic_lines.len() - 1 {
                     let line_below = &schematic_lines[schematic_idx + 1].0;
                     // we need to expand the number span to include the characters that are diagonally adjacent
-                    let expanded_number_span = expand_range(number_span);
+                    let expanded_number_span = expand_range(number_span, line_below.len());
                     // slice the line above to get the characters that contain symbols
                     // that are adjacent to this number
                     let line_below_slice = &line_below[expanded_number_span];
@@ -144,13 +145,14 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
     Ok(sum)
 }
 
-fn expand_range(number_span: &NumberSpan) -> Range<usize> {
+fn expand_range(number_span: &NumberSpan, max: usize) -> Range<usize> {
+    let end = min(number_span.span.end + 1, max);
     if number_span.span.start == 0 {
         // range may be negative, but usize cannot so we need to handle this case
         // to avoid a subtract overflow panic
-        number_span.span.start..number_span.span.end + 1
+        number_span.span.start..end
     } else {
-        number_span.span.start - 1..number_span.span.end + 1
+        number_span.span.start - 1..end
     }
 }
 
@@ -209,6 +211,14 @@ fn find_schematic_parts(input: String) -> Result<Vec<SchematicPart>, Box<dyn std
             let span = idx..idx + 1;
             result.push(SchematicPart::SymbolSpan(SymbolSpan { span, char }));
         }
+    }
+    if !buf.is_empty() {
+        // if the buffer is not empty at the end of the line, then fold the buffer into a single number
+        // and push it into the result
+        let end_idx = input.len();
+        let value = buf.iter().fold(0, |acc, x| acc * 10 + x);
+        let span = start_idx.unwrap()..end_idx;
+        result.push(SchematicPart::NumberSpan(NumberSpan { span, value }));
     }
     Ok(result)
 }
@@ -290,5 +300,85 @@ mod tests {
                 char: '*'
             }),
         ]
+    );
+
+    parameterized_schema_parts_test!(
+        day3_find_schematic_parts_number_at_end_of_line,
+        ".......617",
+        vec![SchematicPart::NumberSpan(NumberSpan {
+            span: 7..10,
+            value: 617
+        }),]
+    );
+
+    macro_rules! param_expand_range_test {
+        ($name:ident, $input:expr, $expected:expr) => {
+            #[test]
+            fn $name() -> Result<(), Box<dyn std::error::Error>> {
+                let result = super::expand_range($input, 42);
+                assert_eq!(result, $expected);
+                Ok(())
+            }
+        };
+    }
+
+    param_expand_range_test!(
+        day3_expand_range_start_at_0_does_not_expand,
+        &NumberSpan {
+            span: 0..3,
+            value: 617
+        },
+        0..4
+    );
+
+    param_expand_range_test!(
+        day3_expand_range_start_at_1_expands,
+        &NumberSpan {
+            span: 1..4,
+            value: 617
+        },
+        0..5
+    );
+
+    macro_rules! param_range_slice_test {
+        ($name:ident, $input_string:expr, $input_range:expr, $expected_string:expr) => {
+            #[test]
+            fn $name() -> Result<(), Box<dyn std::error::Error>> {
+                let input = String::from($input_string);
+                let result = &input[expand_range($input_range, input.len())];
+                assert_eq!(result, $expected_string);
+                Ok(())
+            }
+        };
+    }
+
+    param_range_slice_test!(
+        day3_range_slice,
+        "617*......",
+        &NumberSpan {
+            span: 0..3,
+            value: 617
+        },
+        "617*"
+    );
+
+    param_range_slice_test!(
+        day3_range_slice_end_of_string,
+        ".......617",
+        &NumberSpan {
+            span: 7..10,
+            value: 617
+        },
+        ".617"
+    );
+
+    param_range_slice_test!(
+        day3_range_slice_middle_of_string,
+        "....617...",
+        &NumberSpan {
+            span: 4..7,
+            value: 617
+        },
+        ".617."
     );
 }
