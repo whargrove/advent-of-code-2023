@@ -1,6 +1,6 @@
 use crate::days::Day;
 use clap::{arg, command, value_parser};
-use itertools::enumerate;
+use itertools::{enumerate};
 use std::fs::read_to_string;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -27,9 +27,14 @@ impl Day for Day3 {
 fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
     let schematic_lines = input
         .lines()
-        .map(|line| find_schematic_parts(line.to_string()))
-        .filter_map(Result::ok)
-        .collect::<Vec<Vec<SchematicPart>>>();
+        // TODO avoid use of unwrap here
+        .map(|line| {
+            (
+                line.to_string(),
+                find_schematic_parts(line.to_string()).unwrap(),
+            )
+        })
+        .collect::<Vec<(String, Vec<SchematicPart>)>>();
 
     // collect the number spans that are adjacent to a symbol span
     // uses enumerate to get the line number so that we can check the line above and below
@@ -38,7 +43,7 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
     // an alternative implementation would be to hash the number spans by their line number
     // and store the adjacent numbers in a set
     let mut numbers_adjacent_to_symbols: Vec<Vec<&SchematicPart>> = Vec::new();
-    for (schematic_idx, parts) in enumerate(&schematic_lines) {
+    for (schematic_idx, (_raw_line, parts)) in enumerate(&schematic_lines) {
         let mut numbers_adjacent_to_symbols_line: Vec<&SchematicPart> = Vec::new();
         for (part_idx, part) in enumerate(parts) {
             if let SchematicPart::NumberSpan(number_span) = part {
@@ -77,84 +82,49 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                     }
                 }
 
-                // todo: refactor to expand this number span
-                // and then check if the expanded span overlaps with any symbol spans from previous
-                // or next lines.
-                // we could use the raw lines here and slice the chars to check if overlap the expanded span
-
                 // check the line above
                 if schematic_idx > 0 {
-                    let line_above = &schematic_lines[schematic_idx - 1];
-                    for part_above in line_above {
-                        if let SchematicPart::SymbolSpan(symbol_span) = part_above {
-                            // a symbol on a previous or next line is adjacent to this number if
-                            // the symbol is in a range defined by the span of the number +/- 1
-                            // to allow diagonal adjacency
-                            println!(
-                                "[{}] Symbol Span: {:?} {:?}",
-                                schematic_idx, symbol_span.span, symbol_span.char
-                            );
-                            let expanded_symbol_span = if symbol_span.span.start == 0 {
-                                // fix subtract overflow panic
-                                symbol_span.span.start..symbol_span.span.end + 1
-                            } else {
-                                symbol_span.span.start - 1..symbol_span.span.end + 1
-                            };
-                            println!(
-                                "[{}] Expanded Symbol Span: {:?} {:?}",
-                                schematic_idx, expanded_symbol_span, symbol_span.char
-                            );
-                            if expanded_symbol_span.contains(&number_span.span.start)
-                                // fix bug where the end of the exclusive span should not be counted as overlapping
-                                // with the expanded symbol span.
-                                || expanded_symbol_span.contains(&(&number_span.span.end - 1))
-                            {
-                                println!(
-                                    "[{}] symbol above: {:?} {:?}",
-                                    schematic_idx, symbol_span.char, number_span.value
-                                );
-                                numbers_adjacent_to_symbols_line.push(part);
-                                break;
-                            }
-                        }
+                    let line_above = &schematic_lines[schematic_idx - 1].0;
+                    // we need to expand the number span to include the characters that are diagonally adjacent
+                    let expanded_number_span = expand_range(number_span);
+                    // slice the line above to get the characters that contain symbols
+                    // that are adjacent to this number
+                    let line_above_slice = &line_above[expanded_number_span];
+                    // if the line above contains any character that is not a '.' or a digit
+                    // then it contains a symbol that is adjacent to this number
+                    if line_above_slice
+                        .chars()
+                        .any(|c| !c.is_ascii_digit() && c != '.')
+                    {
+                        println!(
+                            "[{}] symbol above: {:?} {:?}",
+                            schematic_idx, line_above_slice, number_span.value
+                        );
+                        numbers_adjacent_to_symbols_line.push(part);
+                        continue;
                     }
                 }
 
                 // check the line below
                 if schematic_idx < schematic_lines.len() - 1 {
-                    let line_below = &schematic_lines[schematic_idx + 1];
-                    for part_below in line_below {
-                        if let SchematicPart::SymbolSpan(symbol_span) = part_below {
-                            // a symbol on a previous or next line is adjacent to this number if
-                            // the symbol is in a range defined by the span of the number +/- 1
-                            // to allow diagonal adjacency
-                            println!(
-                                "[{}] Symbol Span: {:?} {:?}",
-                                schematic_idx, symbol_span.span, symbol_span.char
-                            );
-                            let expanded_symbol_span = if symbol_span.span.start == 0 {
-                                // fix subtract overflow panic
-                                symbol_span.span.start..symbol_span.span.end + 1
-                            } else {
-                                symbol_span.span.start - 1..symbol_span.span.end + 1
-                            };
-                            println!(
-                                "[{}] Expanded Symbol Span: {:?} {:?}",
-                                schematic_idx, expanded_symbol_span, symbol_span.char
-                            );
-                            if expanded_symbol_span.contains(&number_span.span.start)
-                                // fix bug where the end of the exclusive span should not be counted as overlapping
-                                // with the expanded symbol span.
-                                || expanded_symbol_span.contains(&(&number_span.span.end - 1))
-                            {
-                                println!(
-                                    "[{}] symbol below: {:?} {:?}",
-                                    schematic_idx, symbol_span.char, number_span.value
-                                );
-                                numbers_adjacent_to_symbols_line.push(part);
-                                break;
-                            }
-                        }
+                    let line_below = &schematic_lines[schematic_idx + 1].0;
+                    // we need to expand the number span to include the characters that are diagonally adjacent
+                    let expanded_number_span = expand_range(number_span);
+                    // slice the line above to get the characters that contain symbols
+                    // that are adjacent to this number
+                    let line_below_slice = &line_below[expanded_number_span];
+                    // if the line above contains any character that is not a '.' or a digit
+                    // then it contains a symbol that is adjacent to this number
+                    if line_below_slice
+                        .chars()
+                        .any(|c| !c.is_ascii_digit() && c != '.')
+                    {
+                        println!(
+                            "[{}] symbol above: {:?} {:?}",
+                            schematic_idx, line_below_slice, number_span.value
+                        );
+                        numbers_adjacent_to_symbols_line.push(part);
+                        continue;
                     }
                 }
             }
@@ -172,6 +142,16 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
         })
         .sum();
     Ok(sum)
+}
+
+fn expand_range(number_span: &NumberSpan) -> Range<usize> {
+    if number_span.span.start == 0 {
+        // range may be negative, but usize cannot so we need to handle this case
+        // to avoid a subtract overflow panic
+        number_span.span.start..number_span.span.end + 1
+    } else {
+        number_span.span.start - 1..number_span.span.end + 1
+    }
 }
 
 #[derive(Debug, PartialEq)]
