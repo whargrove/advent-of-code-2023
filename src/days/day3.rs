@@ -1,5 +1,6 @@
 use crate::days::Day;
 use clap::{arg, command, value_parser};
+use itertools::enumerate;
 use std::fs::read_to_string;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -23,9 +24,121 @@ impl Day for Day3 {
     }
 }
 
-fn run(_input: String) -> Result<u32, Box<dyn std::error::Error>> {
-    // for each line, find the discrete numbers. A number is discrete if it is not adjacent to another number.
-    todo!()
+fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
+    let schematic_lines = input
+        .lines()
+        .map(|line| find_schematic_parts(line.to_string()))
+        .filter_map(Result::ok)
+        .collect::<Vec<Vec<SchematicPart>>>();
+
+    // collect the number spans that are adjacent to a symbol span
+    // uses enumerate to get the line number so that we can check the line above and below
+    // the implementation preserves the original 2d vector structure so that we can push
+    // numbers that are adjacent into the current line only to avoid duplication
+    // an alternative implementation would be to hash the number spans by their line number
+    // and store the adjacent numbers in a set
+    let mut numbers_adjacent_to_symbols: Vec<Vec<&SchematicPart>> = Vec::new();
+    for (schematic_idx, parts) in enumerate(&schematic_lines) {
+        let mut numbers_adjacent_to_symbols_line: Vec<&SchematicPart> = Vec::new();
+        for (part_idx, part) in enumerate(parts) {
+            if let SchematicPart::NumberSpan(number_span) = part {
+                if part_idx > 0 {
+                    // symbol before: +42
+                    if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx - 1] {
+                        if symbol_span.span.end == number_span.span.start {
+                            println!(
+                                "symbol before: {:?} {:?}",
+                                symbol_span.char, number_span.value
+                            );
+                            numbers_adjacent_to_symbols_line.push(part);
+                            continue;
+                        }
+                    }
+                }
+                if part_idx < parts.len() - 1 {
+                    // symbol after: 42+
+                    if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx + 1] {
+                        if symbol_span.span.start == number_span.span.end {
+                            println!(
+                                "symbol after: {:?} {:?}",
+                                number_span.value, symbol_span.char
+                            );
+                            numbers_adjacent_to_symbols_line.push(part);
+                            continue;
+                        }
+                    }
+                }
+
+                // check the line above
+                if schematic_idx > 0 {
+                    let line_above = &schematic_lines[schematic_idx - 1];
+                    for part_above in line_above {
+                        if let SchematicPart::SymbolSpan(symbol_span) = part_above {
+                            // a symbol on a previous or next line is adjacent to this number if
+                            // the symbol is in a range defined by the span of the number +/- 1
+                            // to allow diagonal adjacency
+                            let expanded_symbol_span = if symbol_span.span.start == 0 {
+                                // fix subtract overflow panic
+                                symbol_span.span.start..symbol_span.span.end + 1
+                            } else {
+                                symbol_span.span.start - 1..symbol_span.span.end + 1
+                            };
+                            if expanded_symbol_span.contains(&number_span.span.start)
+                                || expanded_symbol_span.contains(&number_span.span.end)
+                            {
+                                println!(
+                                    "symbol above: {:?} {:?}",
+                                    symbol_span.char, number_span.value
+                                );
+                                numbers_adjacent_to_symbols_line.push(part);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // check the line below
+                if schematic_idx < schematic_lines.len() - 1 {
+                    let line_below = &schematic_lines[schematic_idx + 1];
+                    for part_below in line_below {
+                        if let SchematicPart::SymbolSpan(symbol_span) = part_below {
+                            // a symbol on a previous or next line is adjacent to this number if
+                            // the symbol is in a range defined by the span of the number +/- 1
+                            // to allow diagonal adjacency
+                            let expanded_symbol_span = if symbol_span.span.start == 0 {
+                                // fix subtract overflow panic
+                                symbol_span.span.start..symbol_span.span.end + 1
+                            } else {
+                                symbol_span.span.start - 1..symbol_span.span.end + 1
+                            };
+                            if expanded_symbol_span.contains(&number_span.span.start)
+                                || expanded_symbol_span.contains(&number_span.span.end)
+                            {
+                                println!(
+                                    "symbol below: {:?} {:?}",
+                                    symbol_span.char, number_span.value
+                                );
+                                numbers_adjacent_to_symbols_line.push(part);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        numbers_adjacent_to_symbols.push(numbers_adjacent_to_symbols_line);
+    }
+
+    let sum: u32 = numbers_adjacent_to_symbols
+        .iter()
+        .flatten()
+        .map(|part| match part {
+            // only sum the values of the number spans
+            SchematicPart::NumberSpan(span) => span.value,
+            _ => 0,
+        })
+        .sum();
+    Ok(sum)
 }
 
 #[derive(Debug, PartialEq)]
@@ -92,7 +205,7 @@ mod tests {
     use super::*;
     use std::fs::read_to_string;
 
-    // #[test]
+    #[test]
     fn day3_sample() {
         let input = read_to_string("tests/day3").unwrap();
         let result = run(input).unwrap();
