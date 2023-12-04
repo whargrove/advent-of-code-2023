@@ -42,32 +42,45 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
         let mut numbers_adjacent_to_symbols_line: Vec<&SchematicPart> = Vec::new();
         for (part_idx, part) in enumerate(parts) {
             if let SchematicPart::NumberSpan(number_span) = part {
+                println!(
+                    "[{}] Number Span: {:?} {:?}",
+                    schematic_idx, number_span.span, number_span.value
+                );
+
+                // check symbol before
                 if part_idx > 0 {
                     // symbol before: +42
                     if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx - 1] {
                         if symbol_span.span.end == number_span.span.start {
                             println!(
-                                "symbol before: {:?} {:?}",
-                                symbol_span.char, number_span.value
+                                "[{}] symbol before: {:?} {:?}",
+                                schematic_idx, symbol_span.char, number_span.value
                             );
                             numbers_adjacent_to_symbols_line.push(part);
                             continue;
                         }
                     }
                 }
+
+                // check symbol after
                 if part_idx < parts.len() - 1 {
                     // symbol after: 42+
                     if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx + 1] {
                         if symbol_span.span.start == number_span.span.end {
                             println!(
-                                "symbol after: {:?} {:?}",
-                                number_span.value, symbol_span.char
+                                "[{}] symbol after: {:?} {:?}",
+                                schematic_idx, number_span.value, symbol_span.char
                             );
                             numbers_adjacent_to_symbols_line.push(part);
                             continue;
                         }
                     }
                 }
+
+                // todo: refactor to expand this number span
+                // and then check if the expanded span overlaps with any symbol spans from previous
+                // or next lines.
+                // we could use the raw lines here and slice the chars to check if overlap the expanded span
 
                 // check the line above
                 if schematic_idx > 0 {
@@ -77,18 +90,28 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                             // a symbol on a previous or next line is adjacent to this number if
                             // the symbol is in a range defined by the span of the number +/- 1
                             // to allow diagonal adjacency
+                            println!(
+                                "[{}] Symbol Span: {:?} {:?}",
+                                schematic_idx, symbol_span.span, symbol_span.char
+                            );
                             let expanded_symbol_span = if symbol_span.span.start == 0 {
                                 // fix subtract overflow panic
                                 symbol_span.span.start..symbol_span.span.end + 1
                             } else {
                                 symbol_span.span.start - 1..symbol_span.span.end + 1
                             };
+                            println!(
+                                "[{}] Expanded Symbol Span: {:?} {:?}",
+                                schematic_idx, expanded_symbol_span, symbol_span.char
+                            );
                             if expanded_symbol_span.contains(&number_span.span.start)
-                                || expanded_symbol_span.contains(&number_span.span.end)
+                                // fix bug where the end of the exclusive span should not be counted as overlapping
+                                // with the expanded symbol span.
+                                || expanded_symbol_span.contains(&(&number_span.span.end - 1))
                             {
                                 println!(
-                                    "symbol above: {:?} {:?}",
-                                    symbol_span.char, number_span.value
+                                    "[{}] symbol above: {:?} {:?}",
+                                    schematic_idx, symbol_span.char, number_span.value
                                 );
                                 numbers_adjacent_to_symbols_line.push(part);
                                 break;
@@ -105,18 +128,28 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                             // a symbol on a previous or next line is adjacent to this number if
                             // the symbol is in a range defined by the span of the number +/- 1
                             // to allow diagonal adjacency
+                            println!(
+                                "[{}] Symbol Span: {:?} {:?}",
+                                schematic_idx, symbol_span.span, symbol_span.char
+                            );
                             let expanded_symbol_span = if symbol_span.span.start == 0 {
                                 // fix subtract overflow panic
                                 symbol_span.span.start..symbol_span.span.end + 1
                             } else {
                                 symbol_span.span.start - 1..symbol_span.span.end + 1
                             };
+                            println!(
+                                "[{}] Expanded Symbol Span: {:?} {:?}",
+                                schematic_idx, expanded_symbol_span, symbol_span.char
+                            );
                             if expanded_symbol_span.contains(&number_span.span.start)
-                                || expanded_symbol_span.contains(&number_span.span.end)
+                                // fix bug where the end of the exclusive span should not be counted as overlapping
+                                // with the expanded symbol span.
+                                || expanded_symbol_span.contains(&(&number_span.span.end - 1))
                             {
                                 println!(
-                                    "symbol below: {:?} {:?}",
-                                    symbol_span.char, number_span.value
+                                    "[{}] symbol below: {:?} {:?}",
+                                    schematic_idx, symbol_span.char, number_span.value
                                 );
                                 numbers_adjacent_to_symbols_line.push(part);
                                 break;
@@ -210,6 +243,20 @@ mod tests {
         let input = read_to_string("tests/day3").unwrap();
         let result = run(input).unwrap();
         assert_eq!(result, 4361);
+    }
+
+    #[test]
+    fn day3_edge_case() {
+        let input = read_to_string("tests/day3_edge_case").unwrap();
+        let result = run(input).unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn day3_edge_case_2() {
+        let input = read_to_string("tests/day3_edge_case_2").unwrap();
+        let result = run(input).unwrap();
+        assert_eq!(result, 0);
     }
 
     macro_rules! parameterized_schema_parts_test {
