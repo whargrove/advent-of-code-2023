@@ -1,5 +1,5 @@
 use crate::days::Day;
-use clap::{arg, command, value_parser};
+use clap::{arg, command, value_parser, ArgAction};
 use itertools::enumerate;
 use std::cmp::min;
 use std::fs::read_to_string;
@@ -10,7 +10,9 @@ pub struct Day3;
 
 impl Day for Day3 {
     fn command() -> clap::Command {
-        command!("day3").arg(arg!(--"input" <PATH>).value_parser(value_parser!(PathBuf)))
+        command!("day3")
+            .arg(arg!(--"input" <PATH>).value_parser(value_parser!(PathBuf)))
+            .arg(arg!(--"verbose").action(ArgAction::SetTrue))
     }
 
     fn run(matches: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
@@ -19,13 +21,15 @@ impl Day for Day3 {
             None => panic!("Input file is missing"),
         };
 
-        let result = run(input)?;
+        let verbose = matches.get_flag("verbose");
+
+        let result = run(input, verbose)?;
         println!("{}", result);
         Ok(())
     }
 }
 
-fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
+fn run(input: String, verbose: bool) -> Result<u32, Box<dyn std::error::Error>> {
     let schematic_lines = input
         .lines()
         // TODO avoid use of unwrap here
@@ -48,20 +52,24 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
         let mut numbers_adjacent_to_symbols_line: Vec<&SchematicPart> = Vec::new();
         for (part_idx, part) in enumerate(parts) {
             if let SchematicPart::NumberSpan(number_span) = part {
-                println!(
-                    "[{}] Number Span: {:?} {:?}",
-                    schematic_idx, number_span.span, number_span.value
-                );
+                if verbose {
+                    println!(
+                        "[{}] Number Span: {:?} {:?}",
+                        schematic_idx, number_span.span, number_span.value
+                    );
+                }
 
                 // check symbol before
                 if part_idx > 0 {
                     // symbol before: +42
                     if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx - 1] {
                         if symbol_span.span.end == number_span.span.start {
-                            println!(
-                                "[{}] symbol before: {:?} {:?}",
-                                schematic_idx, symbol_span.char, number_span.value
-                            );
+                            if verbose {
+                                println!(
+                                    "[{}] symbol before: {:?} {:?}",
+                                    schematic_idx, symbol_span.char, number_span.value
+                                );
+                            }
                             numbers_adjacent_to_symbols_line.push(part);
                             continue;
                         }
@@ -73,10 +81,13 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                     // symbol after: 42+
                     if let SchematicPart::SymbolSpan(symbol_span) = &parts[part_idx + 1] {
                         if symbol_span.span.start == number_span.span.end {
-                            println!(
-                                "[{}] symbol after: {:?} {:?}",
-                                schematic_idx, number_span.value, symbol_span.char
-                            );
+                            if verbose {
+                                println!(
+                                    "[{}] symbol after: {:?} {:?}",
+                                    schematic_idx, number_span.value, symbol_span.char
+                                );
+                            }
+
                             numbers_adjacent_to_symbols_line.push(part);
                             continue;
                         }
@@ -97,10 +108,12 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                         .chars()
                         .any(|c| !c.is_ascii_digit() && c != '.')
                     {
-                        println!(
-                            "[{}] symbol above: {:?} {:?}",
-                            schematic_idx, line_above_slice, number_span.value
-                        );
+                        if verbose {
+                            println!(
+                                "[{}] symbol above: {:?} {:?}",
+                                schematic_idx, line_above_slice, number_span.value
+                            );
+                        }
                         numbers_adjacent_to_symbols_line.push(part);
                         continue;
                     }
@@ -120,10 +133,12 @@ fn run(input: String) -> Result<u32, Box<dyn std::error::Error>> {
                         .chars()
                         .any(|c| !c.is_ascii_digit() && c != '.')
                     {
-                        println!(
-                            "[{}] symbol above: {:?} {:?}",
-                            schematic_idx, line_below_slice, number_span.value
-                        );
+                        if verbose {
+                            println!(
+                                "[{}] symbol above: {:?} {:?}",
+                                schematic_idx, line_below_slice, number_span.value
+                            );
+                        }
                         numbers_adjacent_to_symbols_line.push(part);
                         continue;
                     }
@@ -229,23 +244,31 @@ mod tests {
     use std::fs::read_to_string;
 
     #[test]
+    fn day3_solution() -> Result<(), Box<dyn std::error::Error>> {
+        let input = read_to_string("inputs/day3")?;
+        let result = run(input, false)?;
+        assert_eq!(result, 535078);
+        Ok(())
+    }
+
+    #[test]
     fn day3_sample() {
         let input = read_to_string("tests/day3").unwrap();
-        let result = run(input).unwrap();
+        let result = run(input, false).unwrap();
         assert_eq!(result, 4361);
     }
 
     #[test]
     fn day3_edge_case() {
         let input = read_to_string("tests/day3_edge_case").unwrap();
-        let result = run(input).unwrap();
+        let result = run(input, false).unwrap();
         assert_eq!(result, 0);
     }
 
     #[test]
     fn day3_edge_case_2() {
         let input = read_to_string("tests/day3_edge_case_2").unwrap();
-        let result = run(input).unwrap();
+        let result = run(input, false).unwrap();
         assert_eq!(result, 0);
     }
 
